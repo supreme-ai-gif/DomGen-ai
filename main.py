@@ -1,21 +1,21 @@
 # main.py
 import os
-import uvicorn
-from fastapi import FastAPI, Request, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from neuralic_core import NeuralicBrain
+import uvicorn
+from neuralic_hybrid import NeuralicHybrid
 
-# Create or use existing state file in working dir
+PORT = int(os.getenv("PORT", 8000))
 STATE_FILE = os.getenv("NEURALIC_STATE_FILE", "neuralic_state.json")
-brain = NeuralicBrain(state_file=STATE_FILE)
+brain = NeuralicHybrid(state_file=STATE_FILE)
 
-app = FastAPI(title="Neuralic 3.0 (Biological brain)")
+app = FastAPI(title="Neuralic 2.2 Hybrid")
 
-# Allow CORS for all origins (CHANGE for production)
+# allow all origins for testing
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],    # For dev/testing. Replace with specific origin when deploying.
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -26,8 +26,7 @@ class ChatIn(BaseModel):
 
 @app.post("/chat")
 async def chat(payload: ChatIn):
-    msg = payload.message
-    reply = brain.chat(msg)
+    reply = brain.chat(payload.message)
     return {"reply": reply}
 
 class TeachIn(BaseModel):
@@ -36,11 +35,8 @@ class TeachIn(BaseModel):
 
 @app.post("/teach")
 async def teach(payload: TeachIn):
-    res = brain.teach(payload.input, payload.reply)
-    return {"status": res}
+    return {"status": brain.teach(payload.input, payload.reply)}
 
-# File upload: we use UploadFile (multipart) since you said it's ok to include multipart.
-# Add "python-multipart" in requirements.txt
 @app.post("/learn_file")
 async def learn_file(file: UploadFile = File(...)):
     content = await file.read()
@@ -48,7 +44,7 @@ async def learn_file(file: UploadFile = File(...)):
         text = content.decode("utf-8", errors="ignore")
     except Exception:
         text = str(content)
-    res = brain.learn_from_text(text)
+    res = brain.learn_file_text(text)
     return {"status": res}
 
 @app.get("/stats")
@@ -57,10 +53,18 @@ async def stats():
 
 @app.post("/save_now")
 async def save_now():
-    brain.save_state()
-    return {"status": "saved"}
+    brain.save()
+    return {"status":"saved"}
+
+# Serve a static simple frontend if requested
+from fastapi.responses import FileResponse, HTMLResponse
+@app.get("/", response_class=HTMLResponse)
+async def homepage():
+    idx = os.path.join("static","index.html")
+    if os.path.exists(idx):
+        return FileResponse(idx)
+    return HTMLResponse("<h3>Neuralic 2.2 Hybrid — server is running.</h3>")
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    # On Render set start command: uvicorn main:app --host 0.0.0.0 --port $PORT
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+    # dev run
+    uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=True)
