@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Neuralic 2.2 — Chat</title>
+  <style>
+    body{font-family:Arial;background:#121212;color:#eee;padding:18px}
+    #chat{height:360px;border:1px solid #333;padding:10px;overflow:auto;background:#0f0f0f}
+    .u{color:#7fffd4;margin:6px 0} .a{color:#ffd54f;margin:6px 0}
+    input[type=text]{width:70%;padding:8px}
+    button{padding:8px 10px;margin-left:6px}
+    #filebox{margin-top:10px}
+  </style>
+</head>
+<body>
+  <h2>Neuralic 2.2 — Hybrid Chat</h2>
+  <div id="chat"></div>
+  <input id="msg" type="text" placeholder="Type message...">
+  <button id="send">Send</button>
+  <button id="save">Save Now</button>
+  <div id="filebox">
+    <h4>Upload training file (txt, json)</h4>
+    <input type="file" id="file">
+    <button id="upload">Upload & Learn</button>
+  </div>
+
+<script>
+const BASE = location.origin; // expects same server or change to your URL
+const chatEl = document.getElementById("chat");
+function append(s, cls){ let d=document.createElement("div"); d.className=cls; d.textContent=s; chatEl.appendChild(d); chatEl.scrollTop=chatEl.scrollHeight; }
+
+document.getElementById("send").onclick = async ()=>{
+  const m = document.getElementById("msg").value.trim();
+  if(!m) return;
+  append("You: "+m, "u"); document.getElementById("msg").value="";
+  try{
+    const r = await fetch(BASE + "/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({message:m})});
+    const j = await r.json();
+    append("AI: "+ (j.reply||"[no reply]"), "a");
+  }catch(e){ append("AI: (error)","a"); console.error(e); }
+};
+
+document.getElementById("upload").onclick = async ()=>{
+  const f = document.getElementById("file").files[0];
+  if(!f) return alert("Choose file");
+  const fd = new FormData(); fd.append("file", f);
+  append("Uploading file: "+f.name, "u");
+  try{
+    const r = await fetch(BASE + "/learn_file", {method:"POST", body: fd});
+    const j = await r.json();
+    append("AI: Learned. " + JSON.stringify(j.status), "a");
+  }catch(e){ append("AI: upload error","a"); console.error(e); }
+};
+
+document.getElementById("save").onclick = async ()=>{
+  await fetch(BASE + "/save_now", {method:"POST"});
+  append("Saved server state.", "u");
+};
+</script>
+</body>
+</html>
