@@ -1,61 +1,180 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Neuralic 2.2 — Chat</title>
-  <style>
-    body{font-family:Arial;background:#121212;color:#eee;padding:18px}
-    #chat{height:360px;border:1px solid #333;padding:10px;overflow:auto;background:#0f0f0f}
-    .u{color:#7fffd4;margin:6px 0} .a{color:#ffd54f;margin:6px 0}
-    input[type=text]{width:70%;padding:8px}
-    button{padding:8px 10px;margin-left:6px}
-    #filebox{margin-top:10px}
-  </style>
+    <meta charset="UTF-8">
+    <title>Neuralic AI Chat</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        header {
+            background: #4a90e2;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-size: 1.5em;
+        }
+
+        #chat-container {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message {
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+
+        .user {
+            align-self: flex-end;
+            background: #e1ffc7;
+        }
+
+        .ai {
+            align-self: flex-start;
+            background: #fff;
+            border: 1px solid #ddd;
+        }
+
+        #input-container {
+            display: flex;
+            padding: 10px;
+            background: #fff;
+            border-top: 1px solid #ddd;
+        }
+
+        #user-input {
+            flex: 1;
+            padding: 10px;
+            font-size: 1em;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        #send-btn {
+            padding: 10px 15px;
+            margin-left: 10px;
+            background: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #send-btn:hover {
+            background: #357ABD;
+        }
+
+        #upload-form {
+            display: flex;
+            padding: 10px;
+            background: #f9f9f9;
+            border-top: 1px solid #ddd;
+            align-items: center;
+        }
+
+        #file-input {
+            flex: 1;
+        }
+
+        #upload-btn {
+            padding: 8px 12px;
+            margin-left: 10px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #upload-btn:hover {
+            background: #218838;
+        }
+    </style>
 </head>
 <body>
-  <h2>Neuralic 2.2 — Hybrid Chat</h2>
-  <div id="chat"></div>
-  <input id="msg" type="text" placeholder="Type message...">
-  <button id="send">Send</button>
-  <button id="save">Save Now</button>
-  <div id="filebox">
-    <h4>Upload training file (txt, json)</h4>
-    <input type="file" id="file">
-    <button id="upload">Upload & Learn</button>
-  </div>
+    <header>Neuralic AI Chat</header>
 
-<script>
-const BASE = location.origin; // expects same server or change to your URL
-const chatEl = document.getElementById("chat");
-function append(s, cls){ let d=document.createElement("div"); d.className=cls; d.textContent=s; chatEl.appendChild(d); chatEl.scrollTop=chatEl.scrollHeight; }
+    <div id="chat-container"></div>
 
-document.getElementById("send").onclick = async ()=>{
-  const m = document.getElementById("msg").value.trim();
-  if(!m) return;
-  append("You: "+m, "u"); document.getElementById("msg").value="";
-  try{
-    const r = await fetch(BASE + "/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({message:m})});
-    const j = await r.json();
-    append("AI: "+ (j.reply||"[no reply]"), "a");
-  }catch(e){ append("AI: (error)","a"); console.error(e); }
-};
+    <div id="input-container">
+        <input type="text" id="user-input" placeholder="Type your message..." />
+        <button id="send-btn">Send</button>
+    </div>
 
-document.getElementById("upload").onclick = async ()=>{
-  const f = document.getElementById("file").files[0];
-  if(!f) return alert("Choose file");
-  const fd = new FormData(); fd.append("file", f);
-  append("Uploading file: "+f.name, "u");
-  try{
-    const r = await fetch(BASE + "/learn_file", {method:"POST", body: fd});
-    const j = await r.json();
-    append("AI: Learned. " + JSON.stringify(j.status), "a");
-  }catch(e){ append("AI: upload error","a"); console.error(e); }
-};
+    <form id="upload-form" enctype="multipart/form-data">
+        <input type="file" id="file-input" name="file" required />
+        <button type="submit" id="upload-btn">Upload</button>
+    </form>
 
-document.getElementById("save").onclick = async ()=>{
-  await fetch(BASE + "/save_now", {method:"POST"});
-  append("Saved server state.", "u");
-};
-</script>
+    <script>
+        const chatContainer = document.getElementById("chat-container");
+        const userInput = document.getElementById("user-input");
+        const sendBtn = document.getElementById("send-btn");
+        const uploadForm = document.getElementById("upload-form");
+        const fileInput = document.getElementById("file-input");
+
+        function addMessage(text, sender) {
+            const msg = document.createElement("div");
+            msg.className = "message " + sender;
+            msg.textContent = text;
+            chatContainer.appendChild(msg);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+            addMessage(text, "user");
+            userInput.value = "";
+            try {
+                const res = await fetch("/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: text })
+                });
+                const data = await res.json();
+                addMessage(data.reply, "ai");
+            } catch (err) {
+                addMessage("Error connecting to AI.", "ai");
+            }
+        }
+
+        sendBtn.addEventListener("click", sendMessage);
+        userInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") sendMessage();
+        });
+
+        uploadForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            if (!fileInput.files.length) return;
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+            try {
+                const res = await fetch("/upload", {
+                    method: "POST",
+                    body: formData
+                });
+                const data = await res.json();
+                alert(data.message);
+                fileInput.value = "";
+            } catch (err) {
+                alert("Upload failed.");
+            }
+        });
+    </script>
 </body>
 </html>
