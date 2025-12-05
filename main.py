@@ -1,70 +1,56 @@
 # main.py
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
 import os
-from fastapi import FastAPI, UploadFile, File
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import uvicorn
-from neuralic_hybrid import NeuralicHybrid
+from neuralic_3_0 import Neuralic
 
-PORT = int(os.getenv("PORT", 8000))
-STATE_FILE = os.getenv("NEURALIC_STATE_FILE", "neuralic_state.json")
-brain = NeuralicHybrid(state_file=STATE_FILE)
+app = Flask(__name__, static_folder="static")
+CORS(app)  # Allow frontend to access API
 
-app = FastAPI(title="Neuralic 2.2 Hybrid")
+# Initialize AI
+ai = Neuralic()
+ai.load_state()
 
-# allow all origins for testing
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Serve frontend
+@app.route("/")
+def index():
+    return send_from_directory("static", "index.html")
 
-class ChatIn(BaseModel):
-    message: str
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.json
+    msg = data.get("message","").strip()
+    if not msg:
+        return jsonify({"reply":"Say something."})
+    reply = ai.handle_input(msg)
+    return jsonify({"reply": reply})
 
-@app.post("/chat")
-async def chat(payload: ChatIn):
-    reply = brain.chat(payload.message)
-    return {"reply": reply}
+@app.route("/teach", methods=["POST"])
+def teach():
+    data = request.json
+    msg = data.get("message","").strip()
+    reply_text = data.get("reply","").strip()
+    if not msg or not reply_text:
+        return jsonify({"status":"error","message":"Provide both message and reply"})
+    res = ai.teach(msg, reply_text)
+    return jsonify({"status":"success","result":res})
 
-class TeachIn(BaseModel):
-    input: str
-    reply: str
+@app.route("/upload", methods=["POST"])
+def upload():
+    if "file" not in request.files:
+        return jsonify({"status":"error","message":"No file uploaded"})
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"status":"error","message":"No file selected"})
+    filepath = os.path.join("uploads", file.filename)
+    os.makedirs("uploads", exist_ok=True)
+    file.save(filepath)
+    res = ai.learn_file(filepath)
+    return jsonify({"status":"success","result":res})
 
-@app.post("/teach")
-async def teach(payload: TeachIn):
-    return {"status": brain.teach(payload.input, payload.reply)}
-
-@app.post("/learn_file")
-async def learn_file(file: UploadFile = File(...)):
-    content = await file.read()
-    try:
-        text = content.decode("utf-8", errors="ignore")
-    except Exception:
-        text = str(content)
-    res = brain.learn_file_text(text)
-    return {"status": res}
-
-@app.get("/stats")
-async def stats():
-    return brain.stats()
-
-@app.post("/save_now")
-async def save_now():
-    brain.save()
-    return {"status":"saved"}
-
-# Serve a static simple frontend if requested
-from fastapi.responses import FileResponse, HTMLResponse
-@app.get("/", response_class=HTMLResponse)
-async def homepage():
-    idx = os.path.join("static","index.html")
-    if os.path.exists(idx):
-        return FileResponse(idx)
-    return HTMLResponse("<h3>Neuralic 2.2 Hybrid — server is running.</h3>")
+@app.route("/static/<path:path>")
+def send_static(path):
+    return send_from_directory("static", path)
 
 if __name__ == "__main__":
-    # dev run
-    uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=True)
+    app.run(host="0.0.0.0", port=5000)
